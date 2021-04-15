@@ -1,0 +1,30 @@
+cv2.line(img, (0,0) , (150,150), (255,255,255),15) #15 line width
+cv2.rectangle(img, (15,25) , (150,150), (255,255,255),15)
+cv2.circle(img, (100,63) ,55, (255,255,255),-1) #55= radius #(100,63) = center #-1 = fill
+cv2.polylines(img,[pts],True,(0,0,0),5) pts=numpy.array[[0,0],..]
+img = görüntü
+(0,0) = line start
+(150,150) = line end
+(255,255,255) = color
+font = cv2.FONT_HERSHEY_SIMPLEX        #size
+cv2.putText(img, 'text', (0,130), font, 0.3, (200,255,255), 5 , cv2.LINE_AA)
+
+
+#video kayıt
+        #fourcc = cv.VideoWriter_fourcc(*'XVID')
+        #out = cv.VideoWriter('outğut.avi', fourcc,20.0,(640,480))
+        #out.write(frame)
+
+        #gray efekt
+        #qray = cv.cvtColor(frame,cv.COLOR_BGRA2RGBA)
+        #cv.imshow('gray Frame',qray)
+        #out.release()
+
+        # The number of pixels
+num_rows, num_cols = img.shape[:2]
+
+# Creating a translation matrix
+translation_matrix = np.float32([ [1,0,70], [0,1,-150] ])
+
+# Image translation
+img_translation = cv2.warpAffine(img, translation_matrix, (num_cols,num_rows))
