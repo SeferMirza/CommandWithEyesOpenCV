@@ -1,99 +1,71 @@
 import cv2
 import numpy as np
-
+import sys
+import time
+import dlib
 class Controller():
     def __init__(self):
-        self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades+'haarcascade_frontalface_default.xml')
-        self.eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades+'haarcascade_eye.xml')
-        detector_params = cv2.SimpleBlobDetector_Params()
-        detector_params.filterByArea = True
-        detector_params.maxArea = 1500
-        self.detector = cv2.SimpleBlobDetector_create(detector_params)
-
+        self.detector = dlib.get_frontal_face_detector()
+        self.predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
+        self.frame = None
+        self.faces = None
+        self.cap = cv2.VideoCapture(0)
+        #open phone camera API
+        #self.address = "https://192.168.2.3:8080/video"
+        #self.cap.open(self.address)
+        self.gray = None
+        self.cutEyesLoc = None
     def main(self):
-        cap = cv2.VideoCapture(0)
-        adress = "https://192.168.2.4:8080/video"
-        cap.open(adress)
-        cv2.namedWindow('image')
-        cv2.createTrackbar('threshold', 'image', 0, 255, self.nothing)
+
         while True:
-            _, frame = cap.read()
-            face_frame = self.detect_faces(frame, self.face_cascade)
-            if face_frame is not None:
-                eyes = self.detect_eyes(face_frame, self.eye_cascade)
-                for eye in eyes:
-                    if eye is not None:
-                        threshold = r = cv2.getTrackbarPos('threshold', 'image')
-                        eye = self.cut_eyebrows(eye)
-                        keypoints = self.blob_process(eye, threshold, self.detector)
-                        eye = cv2.drawKeypoints(eye, keypoints, eye, (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-            cv2.imshow('image', frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+
+            self.readSelf()
+
+            self.gray = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
+            self.faces = self.detector(self.gray)
+            self.lanmarkingLeftEyes()
+            
+            cv2.imshow("Frame", self.frame)
+            if self.cutEyesLoc is not None:
+                cv2.imshow("cutting frame", self.cutEyesLoc)
+            
+            key = cv2.waitKey(1)
+            if key == 27:
                 break
-        cap.release()
+        self.cap.release()
         cv2.destroyAllWindows()
+    def readSelf(self):
+        _, self.frame=self.cap.read()
+    def lanmarkingLeftEyes(self):
+        for face in self.faces:
+            #x = face.left()
+            #y = face.top()
+            #x1 = face.right()
+            #y1 = face.bottom()
+            landmarks = self.predictor(self.gray, face)
+            horizontalLineLeft = (landmarks.part(36).x, landmarks.part(36).y)
+            horizontalLineRight = (landmarks.part(39).x, landmarks.part(39).y)
+            
+            verticalLineTop = (landmarks.part(38).x, landmarks.part(38).y)
+            verticalLineBottom = (landmarks.part(40).x, landmarks.part(40).y)
+            self.focusEye(landmarks.part(36).x,landmarks.part(38).y,landmarks.part(39).x,landmarks.part(40).y)
+            cv2.line(self.frame, horizontalLineLeft,horizontalLineRight,(0,255,0),1)
+            cv2.line(self.frame, verticalLineTop,verticalLineBottom,(0,255,0),1)
+            
+    def focusEye(self,x,y,x1,y1):
+        self.cutEyesLoc = self.frame[y:y1, x:x1] 
+        self.cutEyesLoc = cv2.cvtColor(self.cutEyesLoc, cv2.COLOR_BGR2GRAY)
+        #_, self.cutEyesLoc = cv2.threshold(self.cutEyesLoc, 5,255,cv2.THRESH_BINARY)
+        self.cutEyesLoc = cv2.resize(self.cutEyesLoc,None,fx=5,fy=5)
 
-    def detect_faces(self, img, cascade):
-        gray_frame = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        coords = cascade.detectMultiScale(gray_frame, 1.3, 5)
-        if len(coords) > 1:
-            biggest = (0, 0, 0, 0)
-            for i in coords:
-                if i[3] > biggest[3]:
-                    biggest = i
-            biggest = np.array([i], np.int32)
-        elif len(coords) == 1:
-            biggest = coords
-        else:
-            return None
-        for (x, y, w, h) in biggest:
-            frame = img[y:y + h, x:x + w]
-        return frame
-    
-    
-    def detect_eyes(self, img, cascade):
-        gray_frame = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        eyes = cascade.detectMultiScale(gray_frame, 1.3, 5)  # detect eyes
-        width = np.size(img, 1)  # get face frame width
-        height = np.size(img, 0)  # get face frame height
-        left_eye = None
-        right_eye = None
-        for (x, y, w, h) in eyes:
-            if y > height / 2:
-                pass
-            eyecenter = x + w / 2  # get the eye center
-            if eyecenter < width * 0.5:
-                left_eye = img[y:y + h, x:x + w]
-            else:
-                right_eye = img[y:y + h, x:x + w]
-        return left_eye, right_eye
-    
-    
-    def cut_eyebrows(self, img):
-        height, width = img.shape[:2]
-        eyebrow_h = int(height / 4)
-        img = img[eyebrow_h:height, 0:width]  # cut eyebrows out (15 px)
-    
-        return img
+        #self.cutEyesLoc = cv2.GaussianBlur(self.cutEyesLoc, (7,7), 0)
 
-
-    def blob_process(self, img, threshold, detector):
-        gray_frame = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        _, img = cv2.threshold(gray_frame, threshold, 255, cv2.THRESH_BINARY)
-        img = cv2.erode(img, None, iterations=2)
-        img = cv2.dilate(img, None, iterations=4)
-        img = cv2.medianBlur(img, 5)
-        keypoints = detector.detect(img)
-        print(keypoints)
-        return keypoints
-
-
-    def nothing(self,x):
-        pass
-
-
- 
-
+        #video kaydı
+        #self._fourcc = VideoWriter_fourcc(*'MP4V')
+        #self._out = VideoWriter("has.mp4", self._fourcc, 20.0, (240,120))
+    def getCameraShape(self):     
+        for i in range(3):
+            print(self.frame.shape[i])
 
 if __name__ == "__main__":
     ct = Controller()
