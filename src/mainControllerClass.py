@@ -3,18 +3,22 @@ import numpy as np
 import sys, getopt
 import time
 import dlib
+from numpy.lib.function_base import blackman
+i=False
 class Controller():
     def __init__(self):
         self.detector = dlib.get_frontal_face_detector()
         self.predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
         self.frame = None
+        self.ret = None
         self.faces = None
         self.cap = cv2.VideoCapture(0)
         #open phone camera API
         self.address = None#"https://192.168.43.1:8080/video"
-        self.threshold = 25
+        self.threshold = 35
         self.grayFrame = None
         self.cutEyes = None
+        self.img = cv2.imread("anime.jpg")
         self.cutEyesGray = None
         self.contours = None
         self.capThreshold = None
@@ -38,19 +42,21 @@ class Controller():
         self.testImage = None
         self.background = None
         self.eyeCenter = None
-        self.centerArray = np.array([[0,0]])
-        self.centerMean = None
-        self.leftArray = np.array([[0,0]])
-        self.leftMean = None
-        self.rightArray = np.array([[0,0]])
-        self.rightMean = None
-        self.topArray = np.array([[0,0]])
-        self.topMean = None
-        self.bottomArray = np.array([[0,0]])
-        self.bottomMean = None
+        self.maxArray = np.array([[0,0]])
+        self.maxMean = None
+        self.minArray = np.array([[0,0]])
+        self.minMean = None
+        self.key = None
+        self.time = 0
+        self.optIfBlock = 2
+        self.startTimeIfBlock = True
+        self.CalibFinishBlock = False
+        self.finalScreen = False
+        self.screenSizeX=1920
+        self.screenSizeY=1080
     def getOtps(self):
         try:
-            self.otps, self.args = getopt.getopt(sys.argv[1:],"h:c:t:r:a:e:",["help","cameradress","threshold","rgb","eyeline","halfcut","quartercut"])
+            self.otps, self.args = getopt.getopt(sys.argv[1:],"h:c:t:r:a:e:",["help","cameradress","threshold","rgb","eyeline","halfcut","quartercut","calib"])
         except getopt.GetoptError as err:
             print(err)
             sys.exit()
@@ -60,7 +66,6 @@ class Controller():
     def main(self):
         self.getOtps()
         for otp, arg in self.otps:
-
             if otp == '-a':
                 self.address = str(arg)
                 self.cap.open(self.address)
@@ -81,55 +86,85 @@ class Controller():
             elif otp == '--quartercut':
                 self.fx = 0.25
                 self.fy = 0.25
-                
+            elif otp == '--calib':
+                self.calibrationIsOkey = True
         #TODO
         #print(self.otps, self.args)
         #self.optimizationEyesLooking()
-            
+        array1 = [[0,0]]  
+        openImage = False
+        o = False
         while True:
-            self.readSelf()
-            self.frame = cv2.resize(self.frame,None,fx=self.fx,fy=self.fy)
-            #TODO
-            self.frame = cv2.rotate(self.frame,cv2.ROTATE_90_COUNTERCLOCKWISE)
-            self.grayFrame = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
-            self.faces = self.detector(self.grayFrame)
-            self.optimizationEyesLooking()
-            self.lanmarkingLeftEyes()
+            
+            #first open cam
 
-            if self.calibrationIsOkey == True:
-                self.centerArray = self.centerArray[1:]
-                self.bottomArray = self.bottomArray[1:]
-                self.topArray = self.topArray[1:]
-                self.leftArray = self.leftArray[1:]
-                self.rightArray = self.rightArray[1:]
-                self.centerMean = self.centerArray.mean(0)
-                self.bottomMean = self.bottomArray.mean(0)
-                self.topMean =  self.topArray.mean(0)
-                self.leftMean = self.leftArray.mean(0)
-                self.rightMean = self.rightArray.mean(0)
-                self.lookingPointDrawCircle()
+            try:
+                self.readSelf()
+                self.frame = cv2.resize(self.frame,None,fx=self.fx,fy=self.fy)
+                #TODO
+                #self.frame = cv2.rotate(self.frame,cv2.ROTATE_90_COUNTERCLOCKWISE)
+                self.grayFrame = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
+            except:
+                print("error")
+            self.faces = self.detector(self.grayFrame)
+            self.lanmarkingLeftEyes()
             if self.eyeLinesIs == True:
                 self.eyeLines()
-            if self.cameraIs == True:
+            
+            if self.cameraIs == True and self.ret:
                 cv2.imshow("Frame", self.frame)
-            #if self.cutEyesLoc is not None:
-            #    cv2.imshow("cutting frame", self.capThreshold)
             
+
+
+            #second isteğe göre açılan seçenekler (thershold vb) göz seçim ayarları için
+
+            if self.thresholdIs == True:
+                cv2.imshow("2",self.capThreshold)
+            if self.cutEyesGray is not None:
+                cv2.imshow("3", self.cutEyesGray)
+
+
+            self.key = cv2.waitKey(1)
+
+            #third kalibrasyyon
+            #key 'o'
+            if self.key == 79 or self.key == 111:
+                o = True
+                self.cameraIs = False
+                self.thresholdIs = False
+                cv2.destroyAllWindows()
+            #key 'space'
+            if self.key == 32:
+                cv2.destroyAllWindows()
+                o = False
+                openImage = True
+            if self.calibrationIsOkey == True and o == True:
+                self.optimizationEyesLooking()
+
+
+                
+            if openImage == True:
+                self.lookingPointDrawCircle()
+
+            #four final
+            if self.finalScreen:
+                self.final_screen()
             
-            key = cv2.waitKey(1)
-            if key == 27:
-                #print(self.eyeCenter)
+        
+
+            if self.key == 27:
                 break
         self.cap.release()
         cv2.destroyAllWindows()
     def showImage(self):
         self.testImage = cv2.imread('anime.jpg')
-        imageH, imageW, imageChannels= capImg.shape
+        imageH, imageW, imageChannels= self.testImage.shape
         cv2.circle(self.testImage, ( (self.eyeCenter[0] * imageW) / self.rightMean[0], (self.eyeCenter[1] * imageH) / self.bottomMean[1]))
     def lookingPointDrawCircle(self):
-        pass#cv2.circle()
+        self.thresholdIs = False
+        cv2.imshow("",self.img)
     def readSelf(self):
-        _, self.frame=self.cap.read()
+        self.ret, self.frame=self.cap.read()
     def lanmarkingLeftEyes(self):
         for face in self.faces:
             #x = face.left()
@@ -169,13 +204,18 @@ class Controller():
                 #middle point x = x + int(w/2) y = y + int(h/2) 
                 cv2.circle(self.cutEyes, (x+int(w/2),y+int(h/2)) ,5, (255,0,0),-1)
                 self.eyeCenter = [x+int(w/2),y+int(h/2)]
-                
                 break
-            if self.thresholdIs == True:
-                cv2.imshow("2",self.capThreshold)
+
             if self.rgbIs == True:
                 cv2.imshow("c", self.cutEyes)
-
+    def final_screen(self):
+        x,y=self.pC()
+        cv2.circle(self.img, (int(x),int(y)), 15, (0,0,0), -1)
+        print("x:",x," y:",y, " eyecenter:",self.eyeCenter)
+        cv2.imshow("dd",self.img)
+    def pC(self):
+        print(self.minMean)
+        return (self.screenSizeX*(self.eyeCenter[0]-self.minMean[0]))/(self.maxMean[0]-self.minMean[0]),(self.screenSizeY*(self.eyeCenter[1]-self.minMean[1]))/(self.maxMean[1]-self.minMean[1])    
     def eyeLines(self):
         horizontalLineLeft = (self.landmarks.part(36).x, self.landmarks.part(36).y)
         horizontalLineRight = (self.landmarks.part(39).x, self.landmarks.part(39).y)
@@ -189,62 +229,73 @@ class Controller():
     def getCutEyeShape(self,x,y,x1,y1):
         return self.frame[y:y1, x:x1]
     
-    def optimizationEyesLooking(self):
-
-        t = time.localtime()
-        start_time = time.strftime("%S", t)        
+    def optimizationEyesLooking(self):       
         background = np.zeros((screen.height,screen.width),np.uint8)
         cv2.namedWindow("aa", cv2.WND_PROP_FULLSCREEN)
         cv2.moveWindow("aa", screen.x - 1, screen.y - 1)
         cv2.setWindowProperty("aa", cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)
-        if time.perf_counter() < 3:
-            if self.eyeCenter != None:
-                self.centerArray = np.append(self.centerArray, [self.eyeCenter],axis=0)
-            cv2.circle(background, (screen.width//2,screen.height//2), 5, (255,255,255), -1)
-            (text_width, text_height) = cv2.getTextSize("Follow point", cv2.FONT_HERSHEY_SIMPLEX, 0.8, 1)[0]
-            cv2.putText(background, "Follow point", ((screen.width//2)-(text_width//2),(screen.height//2)-30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 1 , cv2.LINE_AA)
-            cv2.imshow("aa",background)
-
-        elif time.perf_counter() < 6:
-            if self.eyeCenter != None:
-                self.bottomArray = np.append(self.bottomArray, [self.eyeCenter],axis=0)
-
-            cv2.circle(background, (screen.width//2,screen.height), 5, (255,255,255), -1)
-            (text_width, text_height) = cv2.getTextSize("Follow point", cv2.FONT_HERSHEY_SIMPLEX, 0.8, 1)[0]
-            cv2.putText(background, "Follow point", ((screen.width//2)-(text_width//2),(screen.height//2)-30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 1 , cv2.LINE_AA)
-            cv2.imshow("aa",background)
-            
-        elif time.perf_counter() < 9:
-            if self.eyeCenter != None:
-                self.rightArray = np.append(self.rightArray, [self.eyeCenter],axis=0)
-            cv2.circle(background, (screen.width,screen.height//2), 5, (255,255,255), -1)
-            (text_width, text_height) = cv2.getTextSize("Follow point", cv2.FONT_HERSHEY_SIMPLEX, 0.8, 1)[0]
-            cv2.putText(background, "Follow point", ((screen.width//2)-(text_width//2),(screen.height//2)-30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 1 , cv2.LINE_AA)
-            cv2.imshow("aa",background)
-            
-        elif time.perf_counter() < 12:
-            if self.eyeCenter != None:
-                self.leftArray = np.append(self.leftArray, [self.eyeCenter],axis=0)
-            cv2.circle(background, (0,screen.height//2), 5, (255,255,255), -1)
-            (text_width, text_height) = cv2.getTextSize("Follow point", cv2.FONT_HERSHEY_SIMPLEX, 0.8, 1)[0]
-            cv2.putText(background, "Follow point", ((screen.width//2)-(text_width//2),(screen.height//2)-30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 1 , cv2.LINE_AA)
-            cv2.imshow("aa",background)
-            
-        elif time.perf_counter() < 25:
-            if self.eyeCenter != None:
-                self.topArray = np.append(self.topArray, [self.eyeCenter],axis=0)
-            cv2.circle(background, (screen.width//2,0), 5, (255,255,255), -1)
-            (text_width, text_height) = cv2.getTextSize("Follow point", cv2.FONT_HERSHEY_SIMPLEX, 0.8, 1)[0]
-            cv2.putText(background, "Follow point", ((screen.width//2)-(text_width//2),(screen.height//2)-30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 1 , cv2.LINE_AA)
-            cv2.imshow("aa",background)
-        else:
-            cv2.destroyAllWindows()
-            self.calibrationIsOkey = True
-            self.check = True
-            #break
-        #cv2.imshow("aa",background)
-
         
+        if self.optIfBlock==1:
+
+            self.startTime(time.perf_counter())
+            if time.perf_counter()-self.time < 3:
+                if self.eyeCenter != None:
+                    self.minArray = np.append(self.minArray, [self.eyeCenter],axis=0)
+                cv2.circle(background, (10,10), 5, (255,255,255), -1)
+                (text_width, text_height) = cv2.getTextSize("Follow point", cv2.FONT_HERSHEY_SIMPLEX, 0.8, 1)[0]
+                cv2.putText(background, "Follow point", ((screen.width//2)-(text_width//2),(screen.height//2)-30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 1 , cv2.LINE_AA)
+
+            elif time.perf_counter()-self.time < 6 and time.perf_counter()-self.time > 3:
+                if self.eyeCenter != None:
+                    self.maxArray = np.append(self.maxArray, [self.eyeCenter],axis=0)
+                cv2.circle(background, (screen.width-10,screen.height-10), 5, (255,255,255), -1)
+                (text_width, text_height) = cv2.getTextSize("Follow point", cv2.FONT_HERSHEY_SIMPLEX, 0.8, 1)[0]
+                cv2.putText(background, "Follow point", ((screen.width//2)-(text_width//2),(screen.height//2)-30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 1 , cv2.LINE_AA)
+            elif time.perf_counter()-self.time == 6:
+                cv2.destroyAllWindows()
+            else:
+                self.CalibFinishBlock = True
+                self.calibrationIsOkey = True
+                self.check = True
+                self.optIfBlock=3
+            
+        elif self.optIfBlock==2:
+            (text_width, text_height) = cv2.getTextSize("Kalibrasyonu ayarlamak için 's' tuşuna basın", cv2.FONT_HERSHEY_SIMPLEX, 0.8, 1)[0]
+            cv2.putText(background, "Kalibrasyonu ayarlamak için 's' tuşuna basın", ((screen.width//2)-(text_width//2),(screen.height//2)-30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 1 , cv2.LINE_AA)
+        elif self.optIfBlock==3:
+            self.optFinish(background)
+      
+            
+            
+
+        #key 's'
+        if self.key == 83 or self.key == 115:
+            self.optIfBlock = 1
+        #TODO
+        #key 'i'
+        if self.key == 73 or self.key == 105:
+            self.minArray = self.minArray[1:]
+            self.maxArray = self.maxArray[1:]
+            #self.minMean = self.minArray.mean(0)
+            self.minMean = self.minArray.min(0)
+            #self.maxMean =  self.maxArray.mean(0)
+            self.maxMean =  self.maxArray.max(0)
+            self.calibrationIsOkey=False
+            self.finalScreen=True
+            cv2.destroyWindow("aa")
+        else:
+
+            cv2.imshow("aa",background)
+
+
+    def optFinish(self, stage):
+        (text_width, text_height) = cv2.getTextSize("Go to do image 'i'", cv2.FONT_HERSHEY_SIMPLEX, 0.8, 1)[0]
+        cv2.putText(stage, "Go to do image 'i'", ((screen.width//2)-(text_width//2),(screen.height//2)-30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 1 , cv2.LINE_AA)
+        cv2.imshow("aa",stage)
+    def startTime(self, time):
+        if self.startTimeIfBlock:
+            self.time = time
+            self.startTimeIfBlock = False
     def getCameraShape(self):     
         for i in range(3):
             print(self.frame.shape[i])
