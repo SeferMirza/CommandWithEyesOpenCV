@@ -3,7 +3,7 @@ import numpy as np
 import sys, getopt
 import time
 import dlib
-from numpy.lib.function_base import blackman
+import math
 i=False
 class Controller():
     def __init__(self):
@@ -210,11 +210,24 @@ class Controller():
                 cv2.imshow("c", self.cutEyes)
     def final_screen(self):
         x,y=self.pC()
-        cv2.circle(self.img, (int(x),int(y)), 15, (0,0,0), -1)
-        print("x:",x," y:",y, " eyecenter:",self.eyeCenter)
+        cv2.namedWindow("dd", cv2.WND_PROP_FULLSCREEN)
+        cv2.moveWindow("dd", screen.x - 1, screen.y - 1)
+        cv2.setWindowProperty("dd", cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)
+        if (x-int(x))<0.5:
+            x=math.floor(x)
+        else:
+            x = x + 1
+            x = math.floor(x)
+        if (y-int(y))<0.5:
+            y=math.floor(y)
+        else:
+            y = y + 1
+            y = math.floor(y)
+        cv2.circle(self.img, (int(x),int(y)), 5, (0,0,0), -1)
+        #print("x:",x," y:",y, " eyecenter:",self.eyeCenter)
         cv2.imshow("dd",self.img)
     def pC(self):
-        print(self.minMean)
+        #print(self.minMean)
         return (self.screenSizeX*(self.eyeCenter[0]-self.minMean[0]))/(self.maxMean[0]-self.minMean[0]),(self.screenSizeY*(self.eyeCenter[1]-self.minMean[1]))/(self.maxMean[1]-self.minMean[1])    
     def eyeLines(self):
         horizontalLineLeft = (self.landmarks.part(36).x, self.landmarks.part(36).y)
@@ -264,14 +277,11 @@ class Controller():
             cv2.putText(background, "Kalibrasyonu ayarlamak için 's' tuşuna basın", ((screen.width//2)-(text_width//2),(screen.height//2)-30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 1 , cv2.LINE_AA)
         elif self.optIfBlock==3:
             self.optFinish(background)
-      
-            
-            
 
         #key 's'
         if self.key == 83 or self.key == 115:
             self.optIfBlock = 1
-        #TODO
+            
         #key 'i'
         if self.key == 73 or self.key == 105:
             self.minArray = self.minArray[1:]
@@ -284,7 +294,6 @@ class Controller():
             self.finalScreen=True
             cv2.destroyWindow("aa")
         else:
-
             cv2.imshow("aa",background)
 
 
